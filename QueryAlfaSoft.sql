@@ -1,0 +1,112 @@
+USE master;
+GO
+
+CREATE DATABASE Contacts COLLATE SQL_Latin1_General_CP1_CI_AS;
+GO
+
+USE Contacts;
+SET ANSI_NULLS ON;
+SET ANSI_NULL_DFLT_ON OFF;
+SET QUOTED_IDENTIFIER ON;
+GO
+
+CREATE TABLE tblContact(ID INT IDENTITY(1, 1) PRIMARY KEY, [Name] NCHAR(20), [Contact] BIGINT, [E-Mail] NCHAR(100));
+GO
+
+CREATE UNIQUE INDEX [unqContact] ON tblContact([Contact] ASC, [E-Mail] ASC);
+GO
+
+CREATE LOGIN [LGD] WITH PASSWORD = 'P@ssword';
+GO
+
+CREATE USER USR FOR LOGIN [LGD];
+GO
+
+--EXEC sp_addrolemember N'Contacts', N'USR';
+
+/*CREATE ROLE db_executor;
+GRANT EXECUTE TO db_executor;*/
+GRANT SELECT ON tblContact TO USR;
+--GRANT db_executor TO USR;
+GO
+
+CREATE PROCEDURE DeleteRecord(@ID AS INT)
+AS
+SET NOCOUNT ON;
+DECLARE @AUX INT;
+IF (@ID IS NULL)
+	RETURN 0;
+SET @AUX = (SELECT ID FROM tblContact WHERE ID = @ID);
+IF @AUX IS NOT NULL
+BEGIN
+	DELETE FROM tblContact
+	WHERE ID = @AUX;
+	RETURN 1;
+END
+ELSE
+	RETURN 0;
+GO
+
+CREATE PROCEDURE AddRecord(@ID AS INT, @Name AS NCHAR(20), @Contact AS BIGINT, @EMail AS NCHAR(100))
+AS
+SET NOCOUNT ON;
+DECLARE @Flag AS BIT = 0;
+IF (((@ID IS NULL OR @Name IS NULL) OR @Contact IS NULL) OR @EMail IS NULL)
+	RETURN @Flag;
+IF (@Contact > 999999999 OR @Contact < 211111111)
+	RETURN @Flag;
+IF (PATINDEX('%[^a-z,0-9,@,.,_,\-]%', @EMail) = 0)
+	RETURN @Flag;
+ELSE
+BEGIN
+	SET TRANSACTION ISOLATION LEVEL REPEATABLE READ;
+	BEGIN TRANSACTION;
+	BEGIN TRY
+		INSERT INTO tblContact([Name], Contact, [E-Mail])
+		VALUES (@Name, @Contact, @EMail);
+		COMMIT;
+		SET @Flag = 1;
+	END TRY
+	BEGIN CATCH
+		ROLLBACK;
+		SET @Flag = 0;
+	END CATCH
+	RETURN @Flag;
+END
+GO
+
+CREATE PROCEDURE UpdateRecord(@ID AS INT, @Name AS NCHAR(20), @Contact AS BIGINT, @EMail AS NCHAR(100))
+AS
+SET NOCOUNT ON;
+DECLARE @Flag AS BIT = 0;
+IF (((@ID IS NULL OR @Name IS NULL) OR @Contact IS NULL) OR @EMail IS NULL)
+	RETURN @Flag;
+IF (@Contact > 999999999 OR @Contact < 211111111)
+	RETURN @Flag;
+IF (PATINDEX('%[^a-z,0-9,@,.,_,\-]%', @EMail) = 0)
+	RETURN @Flag;
+IF NOT EXISTS(SELECT ID FROM tblContact WHERE ID = @ID)
+	RETURN @Flag;
+ELSE
+BEGIN
+	SET TRANSACTION ISOLATION LEVEL SNAPSHOT;
+	BEGIN TRANSACTION;
+	BEGIN TRY
+		UPDATE tblContact
+		SET [Name] = @Name, @Contact = Contact, [E-Mail] = @EMail
+		WHERE ID = @ID;
+		COMMIT;
+		SET @Flag = 1;
+	END TRY
+	BEGIN CATCH
+		ROLLBACK;
+		SET @Flag = 0;
+	END CATCH
+	RETURN @Flag;
+END
+GO
+
+GRANT EXECUTE ON DeleteRecord TO USR;
+GRANT EXECUTE ON AddRecord TO USR;
+GRANT EXECUTE ON UpdateRecord TO USR;
+GO
